@@ -1,10 +1,21 @@
-import { supabase } from "@/lib/supabase";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
 
 type Joke = { id: number; setup: string; punchline: string };
 
 export default async function BooksPage() {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/");
+  }
+
   const { data: jokes, error } = await supabase
     .from("jokes")
     .select("*")
