@@ -2,29 +2,34 @@ import { supabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
-type Book = { id: number; title: string; author: string; year: number | null };
+type Joke = { id: number; setup: string; punchline: string };
 
 export default async function BooksPage() {
-  const { data: books, error } = await supabase
-    .from("books")
+  const { data: jokes, error } = await supabase
+    .from("jokes")
     .select("*")
     .order("id");
 
   if (error) {
-    return <p>Error loading books: {error.message}</p>;
+    return <p>Error loading jokes: {error.message}</p>;
   }
 
   return (
     <main style={{ maxWidth: 640, margin: "2rem auto", padding: "0 1rem" }}>
-      <h1>Books</h1>
+      <h1>Jokes</h1>
       <ul style={{ listStyle: "none", padding: 0 }}>
-        {(books as Book[]).map((b) => (
+        {(jokes as Joke[]).map((j) => (
           <li
-            key={b.id}
-            style={{ border: "1px solid #ddd", borderRadius: 8, padding: "1rem", marginBottom: "0.75rem" }}
+            key={j.id}
+            style={{
+              background: "linear-gradient(to right, #bae6fd, #bbf7d0)",
+              borderRadius: 16,
+              padding: "1rem 1.25rem",
+              marginBottom: "0.75rem",
+            }}
           >
-            <strong>{b.title}</strong>
-            <div>{b.author}{b.year ? `, ${b.year}` : ""}</div>
+            <strong>{j.setup}</strong>
+            <div>{j.punchline}</div>
           </li>
         ))}
       </ul>
