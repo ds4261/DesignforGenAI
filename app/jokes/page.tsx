@@ -1,11 +1,11 @@
-import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
 
 type Joke = { id: number; setup: string; punchline: string };
 
-export default async function BooksPage() {
+export default async function JokesPage() {
   const supabase = await createClient();
 
   const {
@@ -13,7 +13,18 @@ export default async function BooksPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/");
+    return (
+      <main style={{ maxWidth: 640, margin: "2rem auto", padding: "0 1rem" }}>
+        <Link href="/" className="hover:underline">Home</Link>
+        <h1 className="text-3xl font-bold my-4">Jokes</h1>
+        <Link
+          href="/"
+          className="inline-block px-6 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"
+        >
+          Sign in to read jokes
+        </Link>
+      </main>
+    );
   }
 
   const { data: jokes, error } = await supabase
@@ -29,7 +40,7 @@ export default async function BooksPage() {
     <main style={{ maxWidth: 640, margin: "2rem auto", padding: "0 1rem" }}>
       <h1>Jokes</h1>
       <ul style={{ listStyle: "none", padding: 0 }}>
-        {(jokes as Joke[]).map((j) => (
+        {(jokes as Joke[] | null)?.map((j) => (
           <li
             key={j.id}
             style={{

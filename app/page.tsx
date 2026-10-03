@@ -33,9 +33,17 @@ export default function Home() {
     <main className="min-h-screen flex flex-col">
       {/* Top nav */}
       <nav className="flex items-center justify-between px-8 py-4 border-b">
-        <Link href="/books" className="text-lg font-medium hover:underline">
-          Jokes
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link href="/jokes" className="text-lg font-medium hover:underline">
+            Jokes
+          </Link>
+          <Link href="/captions" className="text-lg font-medium hover:underline">
+            Captions
+          </Link>
+          <Link href="/gallery" className="text-lg font-medium hover:underline">
+            Gallery
+          </Link>
+        </div>
 
         {user && (
           <div className="flex items-center gap-4">

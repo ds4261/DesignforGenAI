@@ -20,6 +20,41 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## AI photo captions
+
+Signed-in users can open **Captions**, select a JPG, PNG, or WebP photo (up to
+4 MB), and generate three playful NYC-inspired captions. Photos are sent to Google Gemini for
+generation. Photos are saved in a private Supabase Storage bucket. All three
+captions, the exact system and user prompts, and the model are stored as a private
+draft in the database. The first caption is selected by default. **Save for voting**
+publishes the selected caption and photo to the signed-in gallery. Published
+choices are locked so votes always refer to the same caption.
+
+Before using generation and voting, run
+`supabase/migrations/202610030001_caption_voting.sql` once in your project's
+Supabase **SQL Editor**. It creates the tables, private storage bucket, and
+access policies. No service-role key is required. Owners can publish their own
+drafts, and each signed-in user can add or remove one vote per published photo.
+
+Add a server-only key to `.env.local` and restart the development server:
+
+```dotenv
+GEMINI_API_KEY=your_gemini_api_key
+# Optional; defaults to gemini-3.5-flash-lite
+GEMINI_CAPTION_MODEL=gemini-3.5-flash-lite
+```
+
+Never prefix the API key with `NEXT_PUBLIC_` or commit it. The implementation
+uses [Gemini image input](https://ai.google.dev/gemini-api/docs/image-understanding)
+and structured output. Without a key, the page shows an unavailable message
+when generation is requested.
+
+Create a key in [Google AI Studio](https://aistudio.google.com/apikey).
+Gemini 3.5 Flash-Lite has a limited free tier; your project's billing tier determines
+whether usage is free or paid. School Gemini subscriptions do not determine API
+quotas. See [Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing).
+On the free tier, Google may use submitted content to improve its products.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
