@@ -11,7 +11,7 @@ export default function CaptionForm() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [mediaId, setMediaId] = useState("");
-  const [selected, setSelected] = useState(0);
+  const [selected, setSelected] = useState<number[]>([0]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -27,7 +27,7 @@ export default function CaptionForm() {
     setCaptions([]);
     setMediaId("");
     setSaved(false);
-    setSelected(0);
+    setSelected([0]);
     try {
       const form = new FormData();
       form.append("photo", photo);
@@ -48,7 +48,7 @@ export default function CaptionForm() {
     try {
       const response = await fetch(`/api/media/${mediaId}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ selectedIndex: selected }),
+        body: JSON.stringify({ selectedIndices: selected }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not save your caption.");
@@ -71,7 +71,7 @@ export default function CaptionForm() {
             setCaptions([]);
             setMediaId("");
             setSaved(false);
-            setSelected(0);
+            setSelected([0]);
             setPhoto(message ? null : file);
             setPreview(file && !message ? URL.createObjectURL(file) : "");
           }} className="rounded-xl border p-4" />
@@ -88,14 +88,14 @@ export default function CaptionForm() {
       </button>
       {error && <p role="alert" className="text-red-600">{error}</p>}
       <section aria-live="polite" aria-label="Generated captions">
-        {captions.length > 0 && <h2 className="text-xl font-semibold mb-3">Choose a caption</h2>}
-        {captions.length > 0 && <p className="mb-3">The first caption is selected by default. Save your choice to share the photo and caption for voting.</p>}
+        {captions.length > 0 && <h2 className="text-xl font-semibold mb-3">Choose captions</h2>}
+        {captions.length > 0 && <p className="mb-3">The first caption is selected by default. Select one or more captions to share for voting.</p>}
         <ul className="flex flex-col gap-3" aria-label="Caption choices">
           {captions.map((caption, index) => (
             <li key={index} className="rounded-2xl bg-gradient-to-r from-sky-100 to-green-100 p-5 text-gray-900">
               <label className="flex items-start gap-3 cursor-pointer">
-                <input type="radio" name="caption" value={index} checked={selected === index}
-                  onChange={() => setSelected(index)} disabled={saving || saved} className="mt-1" />
+                <input type="checkbox" name="caption" value={index} checked={selected.includes(index)}
+                  onChange={() => setSelected((current) => current.includes(index) ? current.filter((value) => value !== index) : [...current, index])} disabled={saving || saved} className="mt-1" />
                 <span>{caption}</span>
               </label>
             </li>

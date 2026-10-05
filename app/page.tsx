@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
 export default function Home() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
@@ -32,7 +33,7 @@ export default function Home() {
   return (
     <main className="min-h-screen flex flex-col">
       {/* Top nav */}
-      <nav className="flex items-center justify-between px-8 py-4 border-b">
+      <nav className="flex flex-wrap gap-4 items-center justify-between px-8 py-4 border-b">
         <div className="flex items-center gap-4">
           <Link href="/jokes" className="text-lg font-medium hover:underline">
             Jokes
@@ -43,6 +44,7 @@ export default function Home() {
           <Link href="/gallery" className="text-lg font-medium hover:underline">
             Gallery
           </Link>
+          <Link href="/my-captions" className="text-lg font-medium hover:underline">My captions</Link>
         </div>
 
         {user && (
@@ -66,6 +68,11 @@ export default function Home() {
           <h1 className="text-4xl md:text-6xl font-bold text-gray-800">
             {user ? `Hi ${firstName}` : "Hello World"}
           </h1>
+        </div>
+
+        <div className="flex flex-wrap justify-center gap-4">
+          <Link href="/gallery" className="rounded-xl border border-blue-600 px-8 py-4 text-xl font-semibold text-blue-600 hover:bg-blue-50">Gallery</Link>
+          <Link href="/captions" className="rounded-xl bg-blue-600 px-8 py-4 text-xl font-semibold text-white hover:bg-blue-700">Generate captions</Link>
         </div>
 
         {!user && (

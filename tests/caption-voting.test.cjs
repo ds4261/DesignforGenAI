@@ -5,7 +5,7 @@ const ts = require('typescript');
 
 function load(path, imports) {
   const code = ts.transpileModule(fs.readFileSync(path, 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   const module = { exports: {} };
   new Function('require', 'module', 'exports', code)((name) => {
@@ -22,7 +22,7 @@ function clientMock(results, signedIn = true) {
     auth: { getUser: async () => ({ data: { user: signedIn ? { id: 'owner' } : null } }) },
     from(table) {
       const chain = {};
-      for (const name of ['select', 'insert', 'update', 'upsert', 'delete', 'eq', 'maybeSingle']) {
+      for (const name of ['select', 'insert', 'update', 'upsert', 'delete', 'eq', 'maybeSingle', 'order', 'range']) {
         chain[name] = (...args) => { calls.push({ table, name, args }); return chain; };
       }
       chain.then = (resolve, reject) => Promise.resolve(results.shift()).then(resolve, reject);
@@ -46,7 +46,7 @@ function json(body) { return new Request('http://localhost', { method: 'PATCH', 
 test('publishing defaults to first caption and only updates the owner draft', async () => {
   const client = clientMock([{ data: { id: 'media' }, error: null }]);
   assert.equal((await route(publish, client).PATCH(json({}), context)).status, 200);
-  assert.deepEqual(client.calls.find(c => c.name === 'update').args[0], { selected_index: 0, published: true });
+  assert.deepEqual(client.calls.find(c => c.name === 'update').args[0], { selected_index: 0, selected_indices: [0], published: true });
   assert.ok(client.calls.some(c => c.name === 'eq' && c.args[0] === 'user_id' && c.args[1] === 'owner'));
   assert.ok(client.calls.some(c => c.name === 'eq' && c.args[0] === 'published' && c.args[1] === false));
 });
@@ -62,7 +62,7 @@ test('publishing honors a selection and rejects out of range selections', async 
 
 test('retrying the same published choice is safe but changing it is rejected', async () => {
   for (const [index, status] of [[0, 200], [1, 409]]) {
-    const client = clientMock([{ data: null, error: null }, { data: { published: true, selected_index: 0 } }]);
+    const client = clientMock([{ data: null, error: null }, { data: { published: true, selected_indices: [0] } }]);
     assert.equal((await route(publish, client).PATCH(json({ selectedIndex: index }), context)).status, status);
   }
 });
@@ -74,22 +74,80 @@ test('signed-out requests cannot publish or vote', async () => {
   assert.equal(client.calls.length, 0);
 });
 
-test('votes use duplicate-safe insertion and report the actual count', async () => {
-  const client = clientMock([{ data: { id: 'media' } }, { error: null }, { count: 7, error: null }]);
-  const response = await route(votes, client).PUT(json({}), context);
-  assert.deepEqual(await response.json(), { voted: true, votes: 7 });
-  const insert = client.calls.find(c => c.name === 'upsert');
-  assert.deepEqual(insert.args, [{ media_id: 'media', user_id: 'owner' }, { onConflict: 'media_id,user_id', ignoreDuplicates: true }]);
+test('multiple choices are normalized; empty selection defaults to first; invalid choices rejected', async () => {
+  for (const [choices, expected] of [[[2, 0, 2], [0, 2]], [[], [0]], [[0, 1, 2], [0, 1, 2]]]) {
+    const client = clientMock([{ data: { id: 'media' }, error: null }]);
+    assert.equal((await route(publish, client).PATCH(json({ selectedIndices: choices }), context)).status, 200);
+    assert.deepEqual(client.calls.find(c => c.name === 'update').args[0].selected_indices, expected);
+  }
+  for (const choices of [[3], ['1'], null, 'all', [0, 1, 2, 0]]) {
+    if (choices === null) continue;
+    assert.equal((await route(publish, clientMock([])).PATCH(json({ selectedIndices: choices }), context)).status, 400);
+  }
 });
 
-test('removing a vote only removes the current user vote; drafts cannot be voted on', async () => {
-  const client = clientMock([{ data: { id: 'media' } }, { error: null }, { count: 0, error: null }]);
-  const response = await route(votes, client).DELETE(json({}), context);
-  assert.deepEqual(await response.json(), { voted: false, votes: 0 });
+test('heart and downvote upserts replace the same user reaction per caption', async () => {
+  for (const direction of [1, -1]) {
+    const client = clientMock([{ data: { id: 'media', selected_indices: [0, 2] } }, { error: null }, { count: 7 }, { count: 2 }]);
+    const response = await route(votes, client).PUT(json({ captionIndex: 2, direction }), context);
+    assert.deepEqual(await response.json(), { reaction: direction, hearts: 7, downvotes: 2 });
+    assert.deepEqual(client.calls.find(c => c.name === 'upsert').args, [
+      { media_id: 'media', caption_index: 2, user_id: 'owner', direction },
+      { onConflict: 'media_id,caption_index,user_id' },
+    ]);
+  }
+});
+
+test('removing a reaction is limited to the current user and caption', async () => {
+  const client = clientMock([{ data: { id: 'media', selected_indices: [0] } }, { error: null }, { count: 0 }, { count: 1 }]);
+  const response = await route(votes, client).DELETE(json({ captionIndex: 0 }), context);
+  assert.deepEqual(await response.json(), { reaction: 0, hearts: 0, downvotes: 1 });
   assert.ok(client.calls.some(c => c.table === 'nyc_caption_votes' && c.name === 'eq' && c.args[0] === 'user_id' && c.args[1] === 'owner'));
-  const missing = clientMock([{ data: null }]);
-  assert.equal((await route(votes, missing).PUT(json({}), context)).status, 404);
-  assert.ok(!missing.calls.some(c => c.name === 'upsert'));
+  assert.ok(client.calls.some(c => c.table === 'nyc_caption_votes' && c.name === 'eq' && c.args[0] === 'caption_index' && c.args[1] === 0));
+});
+
+test('drafts and unselected captions cannot receive reactions', async () => {
+  for (const media of [null, { id: 'media', selected_indices: [1] }]) {
+    const client = clientMock([{ data: media }]);
+    assert.equal((await route(votes, client).PUT(json({ captionIndex: 0, direction: 1 }), context)).status, 404);
+    assert.ok(!client.calls.some(c => c.name === 'upsert'));
+  }
+});
+
+test('invalid reactions never reach the database', async () => {
+  for (const body of [{}, { captionIndex: 0, direction: 0 }, { captionIndex: 3, direction: 1 }, { captionIndex: '0', direction: -1 }]) {
+    const client = clientMock([]);
+    assert.equal((await route(votes, client).PUT(json(body), context)).status, 400);
+    assert.equal(client.calls.length, 0);
+  }
+});
+
+test('My captions filters by the authenticated owner; the public gallery filters published media', async () => {
+  for (const mine of [true, false]) {
+    const client = clientMock([{ data: [], error: null, count: 0 }]);
+    const collection = load('app/gallery/CaptionCollection.tsx', {
+      '@/lib/supabase-server': { createClient: async () => client },
+      'next/link': { default: 'Link' },
+      './VoteButton': { default: 'VoteButton' },
+      '@/app/captions/DraftPublisher': { default: 'DraftPublisher' },
+      'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
+    }).default;
+    await collection({ mine });
+    const filter = client.calls.find(c => c.name === 'eq');
+    assert.deepEqual(filter.args, mine ? ['user_id', 'owner'] : ['published', true]);
+  }
+});
+
+test('signed-out visitors cannot load the personal collection', async () => {
+  const client = clientMock([], false);
+  const collection = load('app/gallery/CaptionCollection.tsx', {
+    '@/lib/supabase-server': { createClient: async () => client },
+    'next/link': { default: 'Link' }, './VoteButton': { default: 'VoteButton' },
+    '@/app/captions/DraftPublisher': { default: 'DraftPublisher' },
+    'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
+  }).default;
+  await collection({ mine: true });
+  assert.equal(client.calls.length, 0);
 });
 
 test('generation stores original captions, exact prompts, model and photo; failed inserts clean up the photo', async () => {

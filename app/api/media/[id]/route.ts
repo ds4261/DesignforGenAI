@@ -8,18 +8,19 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   let body;
   try { body = await request.json(); }
   catch { return Response.json({ error: "Choose a caption to save." }, { status: 400 }); }
-  const index = body?.selectedIndex ?? 0;
-  if (!Number.isInteger(index) || index < 0 || index > 2) {
-    return Response.json({ error: "Choose one of the three captions." }, { status: 400 });
+  const choices = body?.selectedIndices ?? [body?.selectedIndex ?? 0];
+  if (!Array.isArray(choices) || choices.length > 3 || choices.some((index) => !Number.isInteger(index) || index < 0 || index > 2)) {
+    return Response.json({ error: "Choose from the three generated captions." }, { status: 400 });
   }
+  const indices = [...new Set<number>(choices.length ? choices : [0])].sort();
   const { data, error } = await supabase.from("nyc_caption_media")
-    .update({ selected_index: index, published: true })
+    .update({ selected_index: indices[0], selected_indices: indices, published: true })
     .eq("id", id).eq("user_id", user.id).eq("published", false).select("id").maybeSingle();
   if (error) return Response.json({ error: "Could not save the caption. Please try again." }, { status: 503 });
   if (!data) {
-    const { data: existing } = await supabase.from("nyc_caption_media").select("selected_index, published")
+    const { data: existing } = await supabase.from("nyc_caption_media").select("selected_indices, published")
       .eq("id", id).eq("user_id", user.id).maybeSingle();
-    if (!existing?.published || existing.selected_index !== index) {
+    if (!existing?.published || JSON.stringify(existing.selected_indices) !== JSON.stringify(indices)) {
       return Response.json({ error: "This caption is unavailable or has already been saved with a different choice." }, { status: 409 });
     }
   }

@@ -26,15 +26,21 @@ Signed-in users can open **Captions**, select a JPG, PNG, or WebP photo (up to
 4 MB), and generate three playful NYC-inspired captions. Photos are sent to Google Gemini for
 generation. Photos are saved in a private Supabase Storage bucket. All three
 captions, the exact system and user prompts, and the model are stored as a private
-draft in the database. The first caption is selected by default. **Save for voting**
-publishes the selected caption and photo to the signed-in gallery. Published
+draft in the database. The first caption is selected by default; users can select
+multiple captions. **Save for voting** publishes the selected captions and photo
+to the signed-in gallery. Each caption gets independent hearts and downvotes. Published
 choices are locked so votes always refer to the same caption.
 
 Before using generation and voting, run
 `supabase/migrations/202610030001_caption_voting.sql` once in your project's
 Supabase **SQL Editor**. It creates the tables, private storage bucket, and
-access policies. No service-role key is required. Owners can publish their own
-drafts, and each signed-in user can add or remove one vote per published photo.
+access policies. Then run `supabase/migrations/202610050001_multiple_captions_downvotes.sql`
+to enable multiple selections and downvotes. Existing published selections and
+hearts are preserved. No service-role key is required. Owners can publish their
+own drafts, and each signed-in user can add, change, or remove one reaction per
+published caption. **My captions** shows only the signed-in user's generations,
+including private drafts that can be shared later. The home page has **Gallery**
+and **Generate captions** buttons.
 
 Add a server-only key to `.env.local` and restart the development server:
 
