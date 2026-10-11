@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
 import VoteButton from "./VoteButton";
 import DraftPublisher from "@/app/captions/DraftPublisher";
+import DeleteCaptionButton from "@/app/my-captions/DeleteCaptionButton";
 
 export default async function CaptionCollection({ mine = false, requestedPage }: { mine?: boolean; requestedPage?: string }) {
   const supabase = await createClient();
@@ -67,11 +68,15 @@ export default async function CaptionCollection({ mine = false, requestedPage }:
                 {item.entry ? (
                   <section className="pt-4" aria-label={`Caption ${item.entry.index + 1}`}>
                     <p className="text-lg font-medium">{item.captions[item.entry.index]}</p>
+                    <div className="mt-4 flex items-start justify-between gap-3">
                     {item.entry.failed ? <p role="alert" className="mt-4">Reactions could not be loaded. Refresh to try again.</p> : (
                       <VoteButton id={item.id} captionIndex={item.entry.index} initialHearts={item.entry.hearts} initialDownvotes={item.entry.downvotes} initialReaction={item.entry.reaction} />
                     )}
+                    {mine && <DeleteCaptionButton id={item.id} captionIndex={item.entry.index} />}
+                    </div>
                   </section>
                 ) : <DraftPublisher id={item.id} captions={item.captions} />}
+                {mine && !item.entry && <div className="mt-4 flex justify-end"><DeleteCaptionButton id={item.id} captionIndex={null} /></div>}
               </article>
             ))}
           </div>

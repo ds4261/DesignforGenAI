@@ -28,6 +28,7 @@ function clientMock(results, signedIn = true) {
       chain.then = (resolve, reject) => Promise.resolve(results.shift()).then(resolve, reject);
       return chain;
     },
+    rpc: async (name, args) => { calls.push({ rpc: name, args }); return results.shift(); },
     storage: { from: () => ({
       upload: async () => ({ error: null }),
       remove: async (paths) => { calls.push({ cleanup: paths }); return { error: null }; },
@@ -130,6 +131,7 @@ test('My captions filters by the authenticated owner; the public gallery filters
       'next/link': { default: 'Link' },
       './VoteButton': { default: 'VoteButton' },
       '@/app/captions/DraftPublisher': { default: 'DraftPublisher' },
+      '@/app/my-captions/DeleteCaptionButton': { default: 'DeleteCaptionButton' },
       'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
     }).default;
     await collection({ mine });
@@ -144,6 +146,7 @@ test('signed-out visitors cannot load the personal collection', async () => {
     '@/lib/supabase-server': { createClient: async () => client },
     'next/link': { default: 'Link' }, './VoteButton': { default: 'VoteButton' },
     '@/app/captions/DraftPublisher': { default: 'DraftPublisher' },
+      '@/app/my-captions/DeleteCaptionButton': { default: 'DeleteCaptionButton' },
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
   }).default;
   await collection({ mine: true });
@@ -184,4 +187,41 @@ test('generation stores original captions, exact prompts, model and photo; faile
     if (originalKey === undefined) delete process.env.GEMINI_API_KEY;
     else process.env.GEMINI_API_KEY = originalKey;
   }
+});
+
+
+test('deletion requires sign-in, a valid choice, and ownership', async () => {
+  const anonymous = clientMock([], false);
+  assert.equal((await route(publish, anonymous).DELETE(json({ captionIndex: 0 }), context)).status, 401);
+  assert.equal(anonymous.calls.length, 0);
+  for (const captionIndex of [undefined, -1, 3, '0', 1.5]) {
+    const client = clientMock([]);
+    assert.equal((await route(publish, client).DELETE(json({ captionIndex }), context)).status, 400);
+    assert.equal(client.calls.length, 0);
+  }
+  const client = clientMock([{ data: null, error: null }]);
+  assert.equal((await route(publish, client).DELETE(json({ captionIndex: 0 }), context)).status, 404);
+  assert.ok(client.calls.some(c => c.name === 'eq' && c.args[0] === 'user_id' && c.args[1] === 'owner'));
+  assert.ok(!client.calls.some(c => c.rpc));
+});
+
+test('deleting one caption preserves the photo; deleting the last caption or draft cleans it up', async () => {
+  for (const [published, captionIndex, photoPath] of [[true, 2, null], [true, 0, 'owner/photo.png'], [false, null, 'owner/draft.png']]) {
+    const client = clientMock([{ data: { id: 'media', published }, error: null }, { data: photoPath, error: null }]);
+    const response = await route(publish, client).DELETE(json({ captionIndex }), context);
+    assert.deepEqual(await response.json(), { deleted: true });
+    assert.deepEqual(client.calls.find(c => c.rpc), { rpc: 'delete_own_nyc_caption', args: { p_media_id: 'media', p_caption_index: captionIndex } });
+    assert.deepEqual(client.calls.filter(c => c.cleanup), photoPath ? [{ cleanup: [photoPath] }] : []);
+  }
+});
+
+test('deletion errors do not remove photos and draft/saved choices cannot be mixed', async () => {
+  for (const [published, captionIndex] of [[true, null], [false, 1]]) {
+    const client = clientMock([{ data: { id: 'media', published }, error: null }]);
+    assert.equal((await route(publish, client).DELETE(json({ captionIndex }), context)).status, 400);
+    assert.ok(!client.calls.some(c => c.rpc || c.cleanup));
+  }
+  const client = clientMock([{ data: { id: 'media', published: true }, error: null }, { data: null, error: { message: 'failed' } }]);
+  assert.equal((await route(publish, client).DELETE(json({ captionIndex: 0 }), context)).status, 503);
+  assert.ok(!client.calls.some(c => c.cleanup));
 });

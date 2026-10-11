@@ -32,7 +32,7 @@ export default function VoteButton({ id, captionIndex, initialHearts, initialDow
   }
 
   return (
-    <div className="mt-4">
+    <div>
       <div className="flex gap-3">
         <button type="button" aria-pressed={reaction === 1} disabled={busy} onClick={() => toggle(1)}
           aria-label={reaction === 1 ? "Remove heart" : "Heart this caption"}

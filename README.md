@@ -42,6 +42,13 @@ published caption. **My captions** shows only the signed-in user's generations,
 including private drafts that can be shared later. The home page has **Gallery**
 and **Generate captions** buttons.
 
+Run `supabase/migrations/202610110001_delete_captions.sql` to enable the owner-only
+delete buttons on **My captions**. Deleting a saved caption removes it from both
+pages and deletes its votes. Other selected captions for the same photo remain.
+Deleting the last saved caption or a private draft removes the generation and
+its stored photo. Original generation prompts remain stored while any saved
+caption still exists. Deletion requires confirmation in the app.
+
 Add a server-only key to `.env.local` and restart the development server:
 
 ```dotenv

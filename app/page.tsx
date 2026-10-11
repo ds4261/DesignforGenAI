@@ -35,9 +35,6 @@ export default function Home() {
       {/* Top nav */}
       <nav className="flex flex-wrap gap-4 items-center justify-between px-8 py-4 border-b">
         <div className="flex items-center gap-4">
-          <Link href="/jokes" className="text-lg font-medium hover:underline">
-            Jokes
-          </Link>
           <Link href="/captions" className="text-lg font-medium hover:underline">
             Captions
           </Link>
