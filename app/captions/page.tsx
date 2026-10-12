@@ -7,15 +7,15 @@ export default async function CaptionsPage() {
   const { data: { user } } = await supabase.auth.getUser();
 
   return (
-    <main className="max-w-2xl mx-auto w-full px-6 py-8">
-      <nav className="flex flex-wrap gap-5">
+    <main className="page-shell">
+      <nav className="nav-links">
         <Link href="/" className="hover:underline">Home</Link>
         <Link href="/gallery" className="hover:underline">Gallery</Link>
         <Link href="/my-captions" className="hover:underline">My captions</Link>
       </nav>
-      <h1 className="text-3xl font-bold mt-6 mb-3">NYC photo captions</h1>
+      <h1 className="page-heading">Your caption studio</h1>
       {user ? <CaptionForm /> : (
-        <Link href="/" className="inline-block px-6 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700">
+        <Link href="/" className="button-primary">
           Sign in to create captions
         </Link>
       )}

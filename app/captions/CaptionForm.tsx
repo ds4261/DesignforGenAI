@@ -59,53 +59,90 @@ export default function CaptionForm() {
   }
 
   return (
-    <form onSubmit={generate} className="flex flex-col gap-5" aria-busy={busy}>
+    <form onSubmit={generate} className="studio-panel flex flex-col gap-5" aria-busy={busy}>
+      {captions.length === 0 && <>
       <p>Upload a photo and get three playful NYC-inspired captions to choose from.</p>
-      <label className="flex flex-col gap-2 font-medium">
-        Choose a photo
-        <input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy || saving}
-          onChange={(event) => {
-            const file = event.target.files?.[0] ?? null;
-            const message = file ? photoError(file) : null;
-            setError(message ?? "");
-            setCaptions([]);
-            setMediaId("");
-            setSaved(false);
-            setSelected([0]);
-            setPhoto(message ? null : file);
-            setPreview(file && !message ? URL.createObjectURL(file) : "");
-          }} className="rounded-xl border p-4" />
-      </label>
-      <p className="text-sm text-gray-500">JPG, PNG, or WebP, up to 4 MB. Your photo is sent to Google Gemini. Generated captions and their prompts are saved privately until you share a caption for voting.</p>
-      {preview && (
-        // A local blob URL previews the selected file before upload.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={preview} alt="Selected photo" className="max-h-96 w-full rounded-2xl object-contain" />
-      )}
-      <button type="submit" disabled={!photo || busy || saving}
-        className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
-        {busy ? "Writing your captions…" : "Generate captions"}
-      </button>
-      {error && <p role="alert" className="text-red-600">{error}</p>}
+      <div className="polaroid">
+        <label className={`polaroid-photo ${busy || saving ? "polaroid-disabled" : ""}`}>
+          <input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy || saving}
+            aria-label={preview ? "Change photo" : "Choose file"}
+            aria-describedby="photo-upload-details"
+            onChange={(event) => {
+              const file = event.target.files?.[0] ?? null;
+              if (!file) return;
+              const message = photoError(file);
+              setError(message ?? "");
+              setCaptions([]);
+              setMediaId("");
+              setSaved(false);
+              setSelected([0]);
+              setPhoto(message ? null : file);
+              setPreview(!message ? URL.createObjectURL(file) : "");
+            }} className="polaroid-input" />
+          {preview ? (
+            // A local blob URL fills the Polaroid before upload.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={preview} alt="Selected photo" className="polaroid-preview" />
+          ) : (
+            <span className="polaroid-placeholder">
+              <svg aria-hidden="true" viewBox="0 0 48 48" fill="none" className="h-14 w-14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="6" y="8" width="36" height="32" rx="4" />
+                <circle cx="17" cy="19" r="4" />
+                <path d="m7 34 10-9 8 7 8-12 9 14" />
+              </svg>
+              <span>Choose file</span>
+              <span className="polaroid-hint">A little moment, ready for its caption.</span>
+            </span>
+          )}
+          {preview && <span className="polaroid-change">Change photo</span>}
+        </label>
+        <button type="submit" disabled={!photo || busy || saving} className="polaroid-generate">
+          {busy ? "Writing your captions…" : "Generate captions"}
+          <span aria-hidden="true">{busy ? "…" : "↗"}</span>
+        </button>
+      </div>
+      <p id="photo-upload-details" className="text-sm palette-muted">JPG, PNG, or WebP, up to 4 MB. Your photo is sent to Google Gemini. Generated captions and their prompts are saved privately until you share a caption for voting.</p>
+      </>}
+      {error && <p role="alert" className="palette-error">{error}</p>}
       <section aria-live="polite" aria-label="Generated captions">
-        {captions.length > 0 && <h2 className="text-xl font-semibold mb-3">Choose captions</h2>}
-        {captions.length > 0 && <p className="mb-3">The first caption is selected by default. Select one or more captions to share for voting.</p>}
-        <ul className="flex flex-col gap-3" aria-label="Caption choices">
-          {captions.map((caption, index) => (
-            <li key={index} className="rounded-2xl bg-gradient-to-r from-sky-100 to-green-100 p-5 text-gray-900">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input type="checkbox" name="caption" value={index} checked={selected.includes(index)}
-                  onChange={() => setSelected((current) => current.includes(index) ? current.filter((value) => value !== index) : [...current, index])} disabled={saving || saved} className="mt-1" />
-                <span>{caption}</span>
-              </label>
-            </li>
-          ))}
-        </ul>
+        {captions.length > 0 && <>
+          <h2 className="text-xl font-semibold mb-2">Pick your favorites</h2>
+          <p className="mb-5 text-sm palette-muted">Select one or more Polaroids to share. If none are selected, the first caption will be saved.</p>
+          <fieldset className="polaroid-board" disabled={saving || saved}>
+            <legend className="sr-only">Choose captions to share</legend>
+            <div className="polaroid-options">
+              {captions.map((caption, index) => (
+                <label key={index} className={`caption-polaroid ${selected.includes(index) ? "caption-polaroid-selected" : ""}`}>
+                  <span className="push-pin" aria-hidden="true" />
+                  <input type="checkbox" name="caption" value={index} checked={selected.includes(index)}
+                    onChange={() => setSelected((current) => current.includes(index) ? current.filter((value) => value !== index) : [...current, index])} className="polaroid-checkbox" />
+                  {preview && (
+                    // Each local photo preview is paired with a different caption.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={preview} alt={`Your photo with caption option ${index + 1}`} className="caption-polaroid-photo" />
+                  )}
+                  <span className="caption-polaroid-text">{caption}</span>
+                  <span className="polaroid-selection">{selected.includes(index) ? "✓ Selected" : "Select this caption"}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </>}
         {mediaId && !saved && <button type="button" onClick={save} disabled={saving}
-          className="mt-4 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white disabled:opacity-50">
+          className="button-primary mt-4 disabled:opacity-50">
           {saving ? "Saving…" : "Save for voting"}
         </button>}
         {saved && <p role="status" className="mt-4">Saved! <Link href="/gallery" className="font-semibold underline">View the voting gallery</Link></p>}
+        {captions.length > 0 && <button type="button" disabled={saving} className="button-secondary mt-5 disabled:opacity-50"
+          onClick={() => {
+            setCaptions([]);
+            setMediaId("");
+            setPhoto(null);
+            setPreview("");
+            setSelected([0]);
+            setSaved(false);
+            setError("");
+          }}>Create with another photo</button>}
       </section>
     </form>
   );

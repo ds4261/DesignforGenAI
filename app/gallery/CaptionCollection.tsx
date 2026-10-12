@@ -1,27 +1,35 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
 import VoteButton from "./VoteButton";
-import DraftPublisher from "@/app/captions/DraftPublisher";
 import DeleteCaptionButton from "@/app/my-captions/DeleteCaptionButton";
 
-export default async function CaptionCollection({ mine = false, requestedPage }: { mine?: boolean; requestedPage?: string }) {
+export default async function CaptionCollection({ mine = false }: { mine?: boolean; requestedPage?: string }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const title = mine ? "My captions" : "Caption gallery";
   if (!user) return (
-    <main className="max-w-2xl mx-auto px-6 py-8">
+    <main className="gallery-page"><div className="page-shell gallery-board gallery-studio">
       <h1 className="text-3xl font-bold mb-4">{title}</h1>
-      <Link href="/" className="inline-block rounded-xl bg-blue-600 px-6 py-3 text-white">Sign in to {mine ? "view your captions" : "view and vote"}</Link>
-    </main>
+      <Link href="/" className="button-primary">Sign in to {mine ? "view your captions" : "view and vote"}</Link>
+    </div></main>
   );
-  const parsedPage = Number(requestedPage ?? 1);
-  const page = Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 10000) : 1;
-  const size = 12;
-  const base = supabase.from("nyc_caption_media")
-    .select("id, photo_path, captions, selected_indices, published", { count: "exact" });
-  const filtered = mine ? base.eq("user_id", user.id) : base.eq("published", true);
-  const { data: media, error, count } = await filtered.order("created_at", { ascending: false }).order("id")
-    .range((page - 1) * size, page * size - 1);
+  const ownerId = user.id;
+  async function loadBatch(offset: number) {
+    const base = supabase.from("nyc_caption_media")
+      .select("id, photo_path, captions, selected_indices, published");
+    const filtered = mine ? base.eq("user_id", ownerId).eq("published", true) : base.eq("published", true);
+    return filtered.order("created_at", { ascending: false }).order("id").range(offset, offset + 499);
+  }
+  const first = await loadBatch(0);
+  const media = [...(first.data ?? [])];
+  let error = first.error;
+  let batchLength = first.data?.length ?? 0;
+  while (!error && batchLength === 500) {
+    const batch = await loadBatch(media.length);
+    error = batch.error;
+    media.push(...(batch.data ?? []));
+    batchLength = batch.data?.length ?? 0;
+  }
 
   const generations = await Promise.all((media ?? []).map(async (item) => {
     const { data: photo, error: photoError } = await supabase.storage.from("nyc-caption-photos").createSignedUrl(item.photo_path, 3600);
@@ -38,36 +46,55 @@ export default async function CaptionCollection({ mine = false, requestedPage }:
     return { ...item, captions, indices, photo: photo?.signedUrl, photoFailed: !!photoError, reactions };
   }));
   type Generation = (typeof generations)[number];
-  type CaptionCard = Generation & { entry: Generation["reactions"][number] | null; key: string };
-  const cards = generations.flatMap<CaptionCard>((item) => item.published
-    ? item.reactions.map((entry) => ({ ...item, entry, key: `${item.id}-${entry.index}` }))
-    : [{ ...item, entry: null, key: `${item.id}-draft` }]);
-  const path = mine ? "/my-captions" : "/gallery";
+  type CaptionCard = Generation & { entry: Generation["reactions"][number]; key: string };
+  const cards = generations.flatMap<CaptionCard>((item) =>
+    item.reactions.map((entry) => ({ ...item, entry, key: `${item.id}-${entry.index}` })));
 
   return (
-    <main className="max-w-4xl mx-auto w-full px-6 py-8">
-      <nav className="flex flex-wrap gap-5">
+    <main className="gallery-page">
+      <nav className="nav-links gallery-navigation">
         <Link href="/" className="hover:underline">Home</Link>
         <Link href="/captions" className="hover:underline">Generate captions</Link>
         <Link href={mine ? "/gallery" : "/my-captions"} className="hover:underline">{mine ? "Gallery" : "My captions"}</Link>
       </nav>
-      <h1 className="text-3xl font-bold mt-6 mb-3">{title}</h1>
-      <p className="mb-6">{mine ? "Your photos and captions, including private drafts." : "Vote for your favorite."}</p>
+      <div className="page-shell gallery-board gallery-studio">
+      <h1 className="gallery-pennant">
+        <span className="sr-only">{title}</span>
+        <svg aria-hidden="true" viewBox="0 0 560 200" className="cloth-pennant">
+          <defs>
+            <pattern id="pennant-weave" width="4" height="4" patternUnits="userSpaceOnUse">
+              <path d="M0 1h4M1 0v4" stroke="var(--paper)" strokeOpacity=".1" strokeWidth=".5" />
+            </pattern>
+            <linearGradient id="pennant-fold" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="var(--paper)" stopOpacity=".16" />
+              <stop offset=".45" stopColor="var(--paper)" stopOpacity="0" />
+              <stop offset="1" stopColor="#43303d" stopOpacity=".2" />
+            </linearGradient>
+          </defs>
+          <path d="M8 48H552L526 100L552 152H8L34 100Z" fill="var(--pond-blue)" stroke="var(--paper)" strokeWidth="8" strokeLinejoin="round" />
+          <path d="M8 48H552L526 100L552 152H8L34 100Z" fill="url(#pennant-weave)" />
+          <path d="M8 48H552L526 100L552 152H8L34 100Z" fill="url(#pennant-fold)" />
+          <path d="M26 60H533L513 100L533 140H26L47 100Z" fill="none" stroke="var(--paper)" strokeOpacity=".8" strokeWidth="1.5" strokeDasharray="3 4" />
+          <text x="280" y="110" textAnchor="middle" fill="var(--voodoo)" fontFamily="Georgia, serif" fontSize="30" fontStyle="italic">{title}</text>
+        </svg>
+      </h1>
+      {mine && <p className="page-description">Your saved photos and captions.</p>}
       {error ? <p role="alert">Captions could not be loaded. Please check the latest caption database setup and try again.</p> : (
         <>
           {cards.length === 0 && <p>No captions here yet. <Link href="/captions" className="underline">Generate some!</Link></p>}
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="gallery-polaroids gallery-board-photos polaroid-board">
             {cards.map((item) => (
-              <article key={item.key} className="rounded-2xl border p-5">
+              <article key={item.key} className="gallery-polaroid">
+                <span className="push-pin" aria-hidden="true" />
                 {item.photo && (
                   // Signed storage URLs expire; a plain image displays the private photo.
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.photo} alt="Photo with AI-generated captions" className="h-64 w-full rounded-xl object-contain" />
+                  <img src={item.photo} alt="Photo with AI-generated captions" className="gallery-polaroid-photo" />
                 )}
                 {item.photoFailed && <p role="alert">The photo could not be loaded. Refresh to try again.</p>}
-                {item.entry ? (
+                {(
                   <section className="pt-4" aria-label={`Caption ${item.entry.index + 1}`}>
-                    <p className="text-lg font-medium">{item.captions[item.entry.index]}</p>
+                    <p className="gallery-caption">{item.captions[item.entry.index]}</p>
                     <div className="mt-4 flex items-start justify-between gap-3">
                     {item.entry.failed ? <p role="alert" className="mt-4">Reactions could not be loaded. Refresh to try again.</p> : (
                       <VoteButton id={item.id} captionIndex={item.entry.index} initialHearts={item.entry.hearts} initialDownvotes={item.entry.downvotes} initialReaction={item.entry.reaction} />
@@ -75,17 +102,13 @@ export default async function CaptionCollection({ mine = false, requestedPage }:
                     {mine && <DeleteCaptionButton id={item.id} captionIndex={item.entry.index} />}
                     </div>
                   </section>
-                ) : <DraftPublisher id={item.id} captions={item.captions} />}
-                {mine && !item.entry && <div className="mt-4 flex justify-end"><DeleteCaptionButton id={item.id} captionIndex={null} /></div>}
+                )}
               </article>
             ))}
           </div>
-          <nav aria-label="Caption pages" className="mt-6 flex gap-5">
-            {page > 1 && <Link href={`${path}?page=${page - 1}`} className="underline">Previous</Link>}
-            {page * size < (count ?? 0) && <Link href={`${path}?page=${page + 1}`} className="underline">Next</Link>}
-          </nav>
+
         </>
       )}
-    </main>
+    </div></main>
   );
 }

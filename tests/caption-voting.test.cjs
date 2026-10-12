@@ -137,6 +137,7 @@ test('My captions filters by the authenticated owner; the public gallery filters
     await collection({ mine });
     const filter = client.calls.find(c => c.name === 'eq');
     assert.deepEqual(filter.args, mine ? ['user_id', 'owner'] : ['published', true]);
+    assert.ok(client.calls.some(c => c.name === 'eq' && c.args[0] === 'published' && c.args[1] === true));
   }
 });
 

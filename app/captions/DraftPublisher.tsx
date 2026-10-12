@@ -34,10 +34,10 @@ export default function DraftPublisher({ id, captions }: { id: string; captions:
           <span>{caption}</span>
         </label>
       ))}
-      <button type="button" onClick={publish} className="rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white disabled:opacity-50">
+      <button type="button" onClick={publish} className="button-primary disabled:opacity-50">
         {busy ? "Saving…" : "Save for voting"}
       </button>
-      {error && <p role="alert" className="text-red-600">{error}</p>}
+      {error && <p role="alert" className="palette-error">{error}</p>}
     </fieldset>
   );
 }
