@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { photoError } from "@/lib/caption-upload";
 import Link from "next/link";
+import Easel from "./Easel";
 
 export default function CaptionForm() {
   const [photo, setPhoto] = useState<File | null>(null);
@@ -59,10 +60,10 @@ export default function CaptionForm() {
   }
 
   return (
-    <form onSubmit={generate} className="studio-panel flex flex-col gap-5" aria-busy={busy}>
+    <form onSubmit={generate} className={`caption-easel-form flex flex-col gap-3 ${captions.length ? "easel-results" : "easel-upload"}`} aria-busy={busy}>
       {captions.length === 0 && <>
       <p>Upload a photo and get three playful NYC-inspired captions to choose from.</p>
-      <div className="polaroid">
+      <Easel><div className="polaroid">
         <label className={`polaroid-photo ${busy || saving ? "polaroid-disabled" : ""}`}>
           <input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy || saving}
             aria-label={preview ? "Change photo" : "Choose file"}
@@ -100,7 +101,7 @@ export default function CaptionForm() {
           {busy ? "Writing your captions…" : "Generate captions"}
           <span aria-hidden="true">{busy ? "…" : "↗"}</span>
         </button>
-      </div>
+      </div></Easel>
       <p id="photo-upload-details" className="text-sm palette-muted">JPG, PNG, or WebP, up to 4 MB. Your photo is sent to Google Gemini. Generated captions and their prompts are saved privately until you share a caption for voting.</p>
       </>}
       {error && <p role="alert" className="palette-error">{error}</p>}
@@ -108,12 +109,11 @@ export default function CaptionForm() {
         {captions.length > 0 && <>
           <h2 className="text-xl font-semibold mb-2">Pick your favorites</h2>
           <p className="mb-5 text-sm palette-muted">Select one or more Polaroids to share. If none are selected, the first caption will be saved.</p>
-          <fieldset className="polaroid-board" disabled={saving || saved}>
+          <fieldset className="city-caption-results" disabled={saving || saved}>
             <legend className="sr-only">Choose captions to share</legend>
             <div className="polaroid-options">
               {captions.map((caption, index) => (
-                <label key={index} className={`caption-polaroid ${selected.includes(index) ? "caption-polaroid-selected" : ""}`}>
-                  <span className="push-pin" aria-hidden="true" />
+                <Easel key={index}><label className={`caption-polaroid ${selected.includes(index) ? "caption-polaroid-selected" : ""}`}>
                   <input type="checkbox" name="caption" value={index} checked={selected.includes(index)}
                     onChange={() => setSelected((current) => current.includes(index) ? current.filter((value) => value !== index) : [...current, index])} className="polaroid-checkbox" />
                   {preview && (
@@ -123,7 +123,7 @@ export default function CaptionForm() {
                   )}
                   <span className="caption-polaroid-text">{caption}</span>
                   <span className="polaroid-selection">{selected.includes(index) ? "✓ Selected" : "Select this caption"}</span>
-                </label>
+                </label></Easel>
               ))}
             </div>
           </fieldset>

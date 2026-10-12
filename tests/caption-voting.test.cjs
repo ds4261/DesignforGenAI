@@ -22,7 +22,7 @@ function clientMock(results, signedIn = true) {
     auth: { getUser: async () => ({ data: { user: signedIn ? { id: 'owner' } : null } }) },
     from(table) {
       const chain = {};
-      for (const name of ['select', 'insert', 'update', 'upsert', 'delete', 'eq', 'maybeSingle', 'order', 'range']) {
+      for (const name of ['select', 'insert', 'update', 'upsert', 'delete', 'eq', 'maybeSingle', 'order', 'range', 'limit']) {
         chain[name] = (...args) => { calls.push({ table, name, args }); return chain; };
       }
       chain.then = (resolve, reject) => Promise.resolve(results.shift()).then(resolve, reject);
@@ -130,6 +130,8 @@ test('My captions filters by the authenticated owner; the public gallery filters
       '@/lib/supabase-server': { createClient: async () => client },
       'next/link': { default: 'Link' },
       './VoteButton': { default: 'VoteButton' },
+      '../CitySkyline': { default: 'CitySkyline' },
+      '../SignInButton': { default: 'SignInButton' },
       '@/app/captions/DraftPublisher': { default: 'DraftPublisher' },
       '@/app/my-captions/DeleteCaptionButton': { default: 'DeleteCaptionButton' },
       'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
@@ -146,6 +148,8 @@ test('signed-out visitors cannot load the personal collection', async () => {
   const collection = load('app/gallery/CaptionCollection.tsx', {
     '@/lib/supabase-server': { createClient: async () => client },
     'next/link': { default: 'Link' }, './VoteButton': { default: 'VoteButton' },
+      '../CitySkyline': { default: 'CitySkyline' },
+      '../SignInButton': { default: 'SignInButton' },
     '@/app/captions/DraftPublisher': { default: 'DraftPublisher' },
       '@/app/my-captions/DeleteCaptionButton': { default: 'DeleteCaptionButton' },
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
@@ -225,4 +229,57 @@ test('deletion errors do not remove photos and draft/saved choices cannot be mix
   const client = clientMock([{ data: { id: 'media', published: true }, error: null }, { data: null, error: { message: 'failed' } }]);
   assert.equal((await route(publish, client).DELETE(json({ captionIndex: 0 }), context)).status, 503);
   assert.ok(!client.calls.some(c => c.cleanup));
+});
+
+
+test('homepage window reads only published preview fields and displays each selected caption', async () => {
+  const client = clientMock([{ data: [{ id: 'media', photo_path: 'owner/photo.png', captions: ['First', 'Second', 'Third'], selected_indices: [0, 2] }], error: null }]);
+  client.storage.from = () => ({ createSignedUrl: async () => ({ data: { signedUrl: 'https://example.test/photo' }, error: null }) });
+  const states = [];
+  const component = load('app/HomeGalleryWindow.tsx', {
+    '@/lib/supabase': { supabase: client },
+    'next/link': { default: 'Link' },
+    react: { useState: value => [value, next => states.push(next)], useEffect: effect => effect() },
+    'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
+  }).default;
+  component();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(client.calls.find(c => c.name === 'select').args, ['id, photo_path, captions, selected_indices']);
+  assert.ok(client.calls.some(c => c.name === 'eq' && c.args[0] === 'published' && c.args[1] === true));
+  const cards = states.find(value => Array.isArray(value));
+  assert.deepEqual(cards.map(card => card.caption), ['First', 'Third']);
+});
+
+
+test('signed-out visitors can browse the public gallery without reading votes or private media', async () => {
+  const client = clientMock([{ data: [], error: null }], false);
+  const collection = load('app/gallery/CaptionCollection.tsx', {
+    '@/lib/supabase-server': { createClient: async () => client },
+    'next/link': { default: 'Link' }, './VoteButton': { default: 'VoteButton' },
+    '../CitySkyline': { default: 'CitySkyline' }, '../SignInButton': { default: 'SignInButton' },
+    '@/app/my-captions/DeleteCaptionButton': { default: 'DeleteCaptionButton' },
+    'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
+  }).default;
+  await collection({});
+  assert.ok(client.calls.some(c => c.name === 'eq' && c.args[0] === 'published' && c.args[1] === true));
+  assert.ok(!client.calls.some(c => c.table === 'nyc_caption_votes'));
+});
+
+test('guest heart opens the app sign-in page without sending a vote request', async () => {
+  const calls = [];
+  const jsx = (type, props) => ({ type, props });
+  const button = load('app/gallery/VoteButton.tsx', {
+    react: { useState: value => [value, () => {}] },
+    'next/navigation': { useRouter: () => ({ push: path => calls.push(path) }) },
+    'react/jsx-runtime': { jsx, jsxs: jsx },
+  }).default;
+  const oldWindow = global.window;
+  global.window = { location: { origin: 'https://example.test' } };
+  try {
+    const tree = button({ id: 'media', captionIndex: 0, initialHearts: 0, initialDownvotes: 0, initialReaction: 0, signedIn: false });
+    const heart = tree.props.children[0].props.children[0];
+    await heart.props.onClick();
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0], '/sign-in');
+  } finally { global.window = oldWindow; }
 });

@@ -82,3 +82,16 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+
+Homepage gallery preview: run `supabase/migrations/202610120001_home_gallery_preview.sql`
+after the earlier caption migrations. It lets signed-out visitors read published photo/caption
+previews. Private drafts, prompts, voting and writes remain restricted. The full Gallery page
+still requires sign-in. The homepage shows the latest 24 published photo generations in its
+scrollable window.
+
+
+The homepage now displays the public gallery. Voting and caption generation require sign-in;
+the public homepage preview migration above enables signed-out photo/caption browsing.
+The previous homepage is retained at `/original-home`, is not linked in navigation, and has
+search indexing disabled. The shared root navigation appears across all pages.
